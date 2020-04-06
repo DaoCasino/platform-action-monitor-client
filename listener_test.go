@@ -101,7 +101,8 @@ loop:
 				t.Error("received 0 events; want more")
 				break loop
 			}
-			t.Logf("%+v", event.Events[0])
+
+			t.Logf("%d %+v", len(event.Events), event.Events[0])
 			break loop
 
 		}
