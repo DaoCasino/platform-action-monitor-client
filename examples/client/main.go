@@ -45,5 +45,6 @@ func main() {
 	}(parentContext, events)
 
 	<-done
+	listener.Unsubscribe(0)
 	cancel()
 }
