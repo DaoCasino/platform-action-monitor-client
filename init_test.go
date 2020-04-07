@@ -1,12 +1,13 @@
 package eventlistener
 
 import (
-	"context"
-	"github.com/rs/zerolog/log"
+	"go.uber.org/zap"
+	"os"
 )
 
 func init() {
-	log.Logger = log.With().Str("package", "EventListener").Bool("test", true).Logger()
-	ctx := log.Logger.WithContext(context.Background())
-	logger = log.Ctx(ctx)
+	if os.Getenv("DEBUG") != "" {
+		logger, _ := zap.NewDevelopment()
+		EnableDebugLogging(logger)
+	}
 }
