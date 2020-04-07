@@ -3,6 +3,7 @@ package eventlistener
 import (
 	"encoding/json"
 	"github.com/lucsky/cuid"
+	"go.uber.org/zap"
 )
 
 const (
@@ -58,7 +59,7 @@ func (e *EventListener) sendRequest(req *requestMessage) (*responseMessage, erro
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug().Str("func", "sendRequest").RawJSON("request", message).Send()
+	messageLog.Debug("sendRequest", zap.Any("request", json.RawMessage(message)))
 
 	wait := newResponseQueue(req.ID, message)
 	e.send <- wait
@@ -71,7 +72,7 @@ func (e *EventListener) processMessage(message []byte) error {
 	if err := json.Unmarshal(message, response); err != nil {
 		return err
 	}
-	logger.Debug().Str("func", "processMessage").RawJSON("response", message).Send()
+	messageLog.Debug("processMessage", zap.Any("response", json.RawMessage(message)))
 
 	if response.ID != nil {
 		e.response <- response
