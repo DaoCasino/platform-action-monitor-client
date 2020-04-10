@@ -10,11 +10,11 @@ type EventType int
 type Event struct {
 	Offset    uint64          `json:"offset"`
 	Sender    string          `json:"sender"`
-	CasinoID  string          `json:"casino_id"`
-	GameID    string          `json:"game_id"`
-	RequestID string          `json:"req_id"`
+	CasinoID  uint64          `json:"casino_id"`
+	GameID    uint64          `json:"game_id"`
+	RequestID uint64          `json:"req_id"`
 	EventType EventType       `json:"event_type"`
-	Data      json.RawMessage `json:"data"` // TODO: ??? interface or json raw message ?
+	Data      json.RawMessage `json:"data"`
 }
 
 type EventMessage struct {

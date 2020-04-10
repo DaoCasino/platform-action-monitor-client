@@ -102,7 +102,8 @@ loop:
 				break loop
 			}
 
-			t.Logf("%d %+v", len(event.Events), event.Events[0])
+			t.Logf("%d %+v\n", len(event.Events), event.Events[0])
+			t.Logf("%s\n", event.Events[0].Data)
 			break loop
 
 		}
