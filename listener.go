@@ -12,8 +12,9 @@ import (
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
+	responseWait   = 10 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 1024 * 10
+	maxMessageSize = 0
 )
 
 type EventListener struct {
@@ -22,6 +23,7 @@ type EventListener struct {
 	WriteWait      time.Duration // Time allowed to write a message to the client.
 	PongWait       time.Duration // Time allowed to read the next pong message from the peer.
 	PingPeriod     time.Duration // Send pings to peer with this period. Must be less than pongWait.
+	ResponseWait   time.Duration // Time allowed to wait response from server.
 
 	conn  *websocket.Conn
 	event chan<- *EventMessage
@@ -37,6 +39,7 @@ func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 		WriteWait:      writeWait,
 		PongWait:       pongWait,
 		PingPeriod:     pingPeriod,
+		ResponseWait:   responseWait,
 
 		event:    event,
 		send:     make(chan *responseQueue, 512),

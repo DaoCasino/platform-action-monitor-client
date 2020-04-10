@@ -26,7 +26,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	listener.Subscribe(0, 0)
+	defer func() {
+		cancel()
+	}()
+
+	if _, err := listener.Subscribe(0, 0); err != nil {
+		log.Fatal(err)
+	}
 
 	go func(ctx context.Context, events <-chan *eventlistener.EventMessage) {
 		for {
@@ -38,13 +44,15 @@ func main() {
 					return
 				}
 				for _, event := range eventMessage.Events {
-					log.Printf("%+v", event)
+					log.Printf("%+v %s\n", event, event.Data)
 				}
 			}
 		}
 	}(parentContext, events)
 
 	<-done
-	listener.Unsubscribe(0)
-	cancel()
+
+	if _, err := listener.Unsubscribe(0); err != nil {
+		log.Fatal(err)
+	}
 }

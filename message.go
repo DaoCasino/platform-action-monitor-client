@@ -2,8 +2,10 @@ package eventlistener
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/lucsky/cuid"
 	"go.uber.org/zap"
+	"time"
 )
 
 const (
@@ -64,7 +66,12 @@ func (e *EventListener) sendRequest(req *requestMessage) (*responseMessage, erro
 	wait := newResponseQueue(req.ID, message)
 	e.send <- wait
 
-	return <-wait.response, nil
+	select {
+	case response := <-wait.response:
+		return response, nil
+	case <-time.After(e.ResponseWait):
+		return nil, fmt.Errorf("request timeout: %+v", req)
+	}
 }
 
 func (e *EventListener) processMessage(message []byte) error {
