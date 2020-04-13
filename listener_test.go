@@ -17,7 +17,7 @@ func TestNewEventListener(t *testing.T) {
 	listener := NewEventListener(addr, nil)
 
 	assert.Equal(t, addr, listener.Addr)
-	assert.Equal(t, int64(maxMessageSize), listener.MaxMessageSize)
+	assert.Equal(t, int64(messageSizeLimit), listener.MessageSizeLimit)
 	assert.Equal(t, writeWait, listener.WriteWait)
 	assert.Equal(t, pongWait, listener.PongWait)
 	assert.Equal(t, pingPeriod, listener.PingPeriod)

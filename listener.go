@@ -10,20 +10,20 @@ import (
 )
 
 const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	responseWait   = 10 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 0
+	writeWait        = 10 * time.Second
+	pongWait         = 60 * time.Second
+	responseWait     = 10 * time.Second
+	pingPeriod       = (pongWait * 9) / 10
+	messageSizeLimit = 0
 )
 
 type EventListener struct {
-	Addr           string        // TCP address to listen.
-	MaxMessageSize int64         // Maximum message size allowed from client.
-	WriteWait      time.Duration // Time allowed to write a message to the client.
-	PongWait       time.Duration // Time allowed to read the next pong message from the peer.
-	PingPeriod     time.Duration // Send pings to peer with this period. Must be less than pongWait.
-	ResponseWait   time.Duration // Time allowed to wait response from server.
+	Addr             string        // TCP address to listen.
+	MessageSizeLimit int64         // Maximum message size allowed from client.
+	WriteWait        time.Duration // Time allowed to write a message to the client.
+	PongWait         time.Duration // Time allowed to read the next pong message from the peer.
+	PingPeriod       time.Duration // Send pings to peer with this period. Must be less than pongWait.
+	ResponseWait     time.Duration // Time allowed to wait response from server.
 
 	conn  *websocket.Conn
 	event chan<- *EventMessage
@@ -34,12 +34,12 @@ type EventListener struct {
 
 func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 	return &EventListener{
-		Addr:           addr,
-		MaxMessageSize: maxMessageSize,
-		WriteWait:      writeWait,
-		PongWait:       pongWait,
-		PingPeriod:     pingPeriod,
-		ResponseWait:   responseWait,
+		Addr:             addr,
+		MessageSizeLimit: messageSizeLimit,
+		WriteWait:        writeWait,
+		PongWait:         pongWait,
+		PingPeriod:       pingPeriod,
+		ResponseWait:     responseWait,
 
 		event:    event,
 		send:     make(chan *responseQueue, 512),

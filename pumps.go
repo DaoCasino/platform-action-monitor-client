@@ -25,7 +25,7 @@ func (e *EventListener) readPump(parentContext context.Context) {
 
 	log.Info(msgPumpRunning)
 
-	e.conn.SetReadLimit(e.MaxMessageSize)
+	e.conn.SetReadLimit(e.MessageSizeLimit)
 	if err := e.conn.SetReadDeadline(time.Now().Add(e.PongWait)); err != nil {
 		log.Error("conn.SetReadDeadline", zap.Error(err))
 	}
