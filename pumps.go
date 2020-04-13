@@ -17,9 +17,7 @@ func (e *EventListener) readPump(parentContext context.Context) {
 	log := pumpsLog.Named("readPump")
 
 	defer func() {
-		if err := e.conn.Close(); err != nil {
-			log.Error("conn.Close", zap.Error(err))
-		}
+		_ = e.conn.Close()
 		log.Info(msgPumpStopped)
 	}()
 
@@ -115,9 +113,7 @@ func (e *EventListener) writePump(parentContext context.Context) {
 		}
 
 		ticker.Stop()
-		if err := e.conn.Close(); err != nil {
-			log.Error("conn.Close", zap.Error(err))
-		}
+		_ = e.conn.Close()
 
 		log.Info(msgPumpStopped)
 	}()
