@@ -89,9 +89,23 @@ func (e *EventListener) processMessage(message []byte) error {
 			return err
 		}
 
+		e.updateOffset(eventMessage.Events)
+
 		if e.event != nil {
 			e.event <- eventMessage
 		}
 	}
 	return nil
+}
+
+func (e *EventListener) updateOffset(events []*Event) {
+	e.Lock()
+	defer e.Unlock()
+
+	for _, event := range events {
+		event := event
+		if offset, ok := e.subscriptions[event.EventType]; ok && offset < event.Offset {
+			e.subscriptions[event.EventType] = event.Offset
+		}
+	}
 }

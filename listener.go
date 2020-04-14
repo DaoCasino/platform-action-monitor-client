@@ -6,44 +6,53 @@ import (
 	"errors"
 	"github.com/gorilla/websocket"
 	"net/url"
+	"sync"
 	"time"
 )
 
 const (
-	writeWait        = 10 * time.Second
-	pongWait         = 60 * time.Second
-	responseWait     = 10 * time.Second
-	pingPeriod       = (pongWait * 9) / 10
-	messageSizeLimit = 0
+	writeWait            = 10 * time.Second
+	pongWait             = 60 * time.Second
+	responseWait         = 10 * time.Second
+	pingPeriod           = (pongWait * 9) / 10
+	messageSizeLimit     = 0
+	reconnectionAttempts = 5
+	reconnectionDelay    = 2 * time.Second
 )
 
 type EventListener struct {
-	Addr             string        // TCP address to listen.
-	MessageSizeLimit int64         // Maximum message size allowed from client.
-	WriteWait        time.Duration // Time allowed to write a message to the client.
-	PongWait         time.Duration // Time allowed to read the next pong message from the peer.
-	PingPeriod       time.Duration // Send pings to peer with this period. Must be less than pongWait.
-	ResponseWait     time.Duration // Time allowed to wait response from server.
+	Addr                 string        // TCP address to listen.
+	MessageSizeLimit     int64         // Maximum message size allowed from client.
+	WriteWait            time.Duration // Time allowed to write a message to the client.
+	PongWait             time.Duration // Time allowed to read the next pong message from the peer.
+	PingPeriod           time.Duration // Send pings to peer with this period. Must be less than pongWait.
+	ResponseWait         time.Duration // Time allowed to wait response from server.
+	ReconnectionAttempts int
 
 	conn  *websocket.Conn
 	event chan<- *EventMessage
 
 	send     chan *responseQueue
 	response chan *responseMessage
+
+	sync.Mutex
+	subscriptions map[EventType]uint64
 }
 
 func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 	return &EventListener{
-		Addr:             addr,
-		MessageSizeLimit: messageSizeLimit,
-		WriteWait:        writeWait,
-		PongWait:         pongWait,
-		PingPeriod:       pingPeriod,
-		ResponseWait:     responseWait,
+		Addr:                 addr,
+		MessageSizeLimit:     messageSizeLimit,
+		WriteWait:            writeWait,
+		PongWait:             pongWait,
+		PingPeriod:           pingPeriod,
+		ResponseWait:         responseWait,
+		ReconnectionAttempts: reconnectionAttempts,
 
-		event:    event,
-		send:     make(chan *responseQueue, 512),
-		response: make(chan *responseMessage, 512),
+		event:         event,
+		send:          make(chan *responseQueue),
+		response:      make(chan *responseMessage),
+		subscriptions: make(map[EventType]uint64),
 	}
 }
 
@@ -82,6 +91,13 @@ func (e *EventListener) Subscribe(eventType EventType, offset uint64) (bool, err
 
 	result := false
 	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		e.subscriptions[eventType] = offset
+		e.Unlock()
+	}
+
 	return result, err
 }
 
@@ -104,5 +120,17 @@ func (e *EventListener) Unsubscribe(eventType EventType) (bool, error) {
 
 	result := false
 	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		delete(e.subscriptions, eventType)
+		e.Unlock()
+	}
+
 	return result, err
+}
+
+func (e *EventListener) addr() string {
+	u := url.URL{Scheme: "ws", Host: e.Addr, Path: "/"}
+	return u.String()
 }

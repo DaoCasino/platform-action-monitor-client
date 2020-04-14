@@ -13,7 +13,7 @@ const (
 	msgParentContextDone = "parent context done"
 )
 
-func (e *EventListener) readPump(parentContext context.Context) {
+func (e *EventListener) readPump(parentContext context.Context) error {
 	log := pumpsLog.Named("readPump")
 
 	defer func() {
@@ -24,30 +24,39 @@ func (e *EventListener) readPump(parentContext context.Context) {
 	log.Info(msgPumpRunning)
 
 	e.conn.SetReadLimit(e.MessageSizeLimit)
-	if err := e.conn.SetReadDeadline(time.Now().Add(e.PongWait)); err != nil {
-		log.Error("conn.SetReadDeadline", zap.Error(err))
+	err := e.conn.SetReadDeadline(time.Now().Add(e.PongWait))
+	if err != nil {
+		return err
 	}
 	e.conn.SetPongHandler(func(string) error { return e.conn.SetReadDeadline(time.Now().Add(e.PongWait)) })
 
+loop:
 	for {
 		select {
 		case <-parentContext.Done():
 			log.Debug(msgParentContextDone)
-			return
+			break loop
 		default:
 			_, message, err := e.conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					log.Error("conn.ReadMessage", zap.Error(err))
 				}
-				return
+				return err
 			}
 
 			if err := e.processMessage(message); err != nil {
 				log.Error("processMessage", zap.Error(err))
+				if err := closeMessage(e.conn, e.WriteWait); err != nil {
+					log.Error("closeMessage", zap.Error(err))
+					return err
+				}
+				return err
 			}
 		}
 	}
+
+	return nil
 }
 
 func (e *EventListener) responsePump(ctx context.Context, send <-chan *responseQueue) {
@@ -64,7 +73,7 @@ func (e *EventListener) responsePump(ctx context.Context, send <-chan *responseQ
 		log.Info(msgPumpStopped)
 	}()
 
-	log.Info(msgPumpStopped)
+	log.Info(msgPumpRunning)
 	for {
 		select {
 		case <-ctx.Done():
@@ -96,7 +105,7 @@ func (e *EventListener) responsePump(ctx context.Context, send <-chan *responseQ
 	}
 }
 
-func (e *EventListener) writePump(parentContext context.Context) {
+func (e *EventListener) writePump(parentContext context.Context) error {
 	log := pumpsLog.Named("writePump")
 
 	ticker := time.NewTicker(e.PingPeriod)
@@ -114,11 +123,12 @@ func (e *EventListener) writePump(parentContext context.Context) {
 
 	log.Info(msgPumpRunning)
 
+loop:
 	for {
 		select {
 		case <-parentContext.Done():
 			log.Debug(msgParentContextDone)
-			return
+			break loop
 
 		case message, ok := <-e.send:
 			if !ok {
@@ -126,13 +136,14 @@ func (e *EventListener) writePump(parentContext context.Context) {
 				log.Debug("close send channel")
 				if err := closeMessage(e.conn, e.WriteWait); err != nil {
 					log.Error("closeMessage", zap.Error(err))
+					return err
 				}
-				return
+				break loop
 			}
 			err := writeMessage(e.conn, e.WriteWait, message.message)
 			if err != nil {
 				log.Error("writeMessage", zap.Error(err))
-				return
+				return err
 			}
 			if message.response != nil {
 				waitResponse <- message
@@ -140,7 +151,10 @@ func (e *EventListener) writePump(parentContext context.Context) {
 		case <-ticker.C:
 			if err := pingMessage(e.conn, e.WriteWait); err != nil {
 				log.Error("pingMessage", zap.Error(err))
+				return err
 			}
 		}
 	}
+
+	return nil
 }
