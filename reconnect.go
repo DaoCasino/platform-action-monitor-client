@@ -19,7 +19,8 @@ func listenAndServe(parentContext context.Context, listener *EventListener) {
 	u := url.URL{Scheme: "ws", Host: listener.Addr, Path: "/"}
 	g, ctx := errgroup.WithContext(parentContext)
 
-	for attempts := 1; attempts <= listener.ReconnectionAttempts; attempts++ {
+	attempts := 1
+	for {
 		log.Debug("connection", zap.Int("attempts", attempts))
 
 		var err error
@@ -47,6 +48,11 @@ func listenAndServe(parentContext context.Context, listener *EventListener) {
 			}
 		} else {
 			log.Error("connection error", zap.String("url", u.String()), zap.Error(err))
+		}
+
+		attempts++
+		if attempts > listener.ReconnectionAttempts {
+			break
 		}
 
 		select {
