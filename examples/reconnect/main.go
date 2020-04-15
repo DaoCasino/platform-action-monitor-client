@@ -14,7 +14,9 @@ import (
 var addr = flag.String("addr", ":8888", "action monitor service address")
 
 func init() {
-	eventlistener.EnableDebugLogging()
+	if os.Getenv("DEBUG") != "" {
+		eventlistener.EnableDebugLogging()
+	}
 }
 
 func main() {
