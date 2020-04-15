@@ -20,6 +20,8 @@ const (
 	reconnectionDelay    = 2 * time.Second
 )
 
+var ListenerClosed = errors.New("listener closed")
+
 type EventListener struct {
 	Addr                 string        // TCP address to listen.
 	MessageSizeLimit     int64         // Maximum message size allowed from client.
@@ -34,6 +36,8 @@ type EventListener struct {
 
 	send     chan *responseQueue
 	response chan *responseMessage
+
+	done chan struct{}
 
 	sync.Mutex
 	subscriptions map[EventType]uint64
@@ -53,6 +57,7 @@ func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 		send:          make(chan *responseQueue),
 		response:      make(chan *responseMessage),
 		subscriptions: make(map[EventType]uint64),
+		done:          make(chan struct{}),
 	}
 }
 
@@ -133,4 +138,9 @@ func (e *EventListener) Unsubscribe(eventType EventType) (bool, error) {
 func (e *EventListener) addr() string {
 	u := url.URL{Scheme: "ws", Host: e.Addr, Path: "/"}
 	return u.String()
+}
+
+func (e *EventListener) Close() {
+	close(e.done)
+	close(e.event)
 }

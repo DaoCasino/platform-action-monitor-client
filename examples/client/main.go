@@ -27,6 +27,7 @@ func main() {
 	}
 
 	defer func() {
+		listener.Close()
 		cancel()
 	}()
 

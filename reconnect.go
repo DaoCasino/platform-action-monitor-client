@@ -11,11 +11,15 @@ import (
 
 func listenAndServe(parentContext context.Context, listener *EventListener) {
 	log := pumpsLog.Named("reconnect")
+	defer func() {
+		listener.Close()
+		log.Debug("listener close")
+	}()
 
 	u := url.URL{Scheme: "ws", Host: listener.Addr, Path: "/"}
 	g, ctx := errgroup.WithContext(parentContext)
 
-	for attempts := 0; attempts < listener.ReconnectionAttempts; attempts++ {
+	for attempts := 1; attempts <= listener.ReconnectionAttempts; attempts++ {
 		log.Debug("connection", zap.Int("attempts", attempts))
 
 		var err error
@@ -29,14 +33,13 @@ func listenAndServe(parentContext context.Context, listener *EventListener) {
 			g.Go(func() error {
 				return listener.writePump(ctx)
 			})
-			g.Go(func() error {
-				for eventType, offset := range listener.subscriptions {
-					if _, err := listener.Subscribe(eventType, offset); err != nil {
-						return err
-					}
+
+			for eventType, offset := range listener.subscriptions {
+				if _, err := listener.Subscribe(eventType, offset); err != nil {
+					log.Error("subscribe error", zap.Error(err))
+					break
 				}
-				return nil
-			})
+			}
 
 			err = g.Wait()
 			if err != nil {
