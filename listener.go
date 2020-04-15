@@ -76,8 +76,8 @@ func (e *EventListener) ListenAndServe(parentContext context.Context) error {
 		return err
 	}
 
-	go e.readPump(parentContext)
-	go e.writePump(parentContext)
+	go func() { _ = e.readPump(parentContext) }()
+	go func() { _ = e.writePump(parentContext) }()
 	return nil
 }
 
@@ -139,11 +139,6 @@ func (e *EventListener) Unsubscribe(eventType EventType) (bool, error) {
 	}
 
 	return result, err
-}
-
-func (e *EventListener) addr() string {
-	u := url.URL{Scheme: "ws", Host: e.Addr, Path: "/"}
-	return u.String()
 }
 
 // Close called in Run, use if calling ListenAndServe in defer block.
