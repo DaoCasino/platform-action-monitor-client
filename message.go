@@ -96,11 +96,11 @@ func (e *EventListener) processMessage(message []byte) error {
 			return err
 		}
 
-		e.updateOffset(eventMessage.Events)
-
 		if e.event != nil {
 			e.event <- eventMessage
 		}
+
+		e.updateOffset(eventMessage.Events)
 	}
 	return nil
 }
