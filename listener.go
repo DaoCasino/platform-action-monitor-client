@@ -23,13 +23,15 @@ const (
 var ListenerClosed = errors.New("listener closed")
 
 type EventListener struct {
-	Addr                 string        // TCP address to listen.
-	MessageSizeLimit     int64         // Maximum message size allowed from client.
-	WriteWait            time.Duration // Time allowed to write a message to the client.
-	PongWait             time.Duration // Time allowed to read the next pong message from the peer.
-	PingPeriod           time.Duration // Send pings to peer with this period. Must be less than pongWait.
-	ResponseWait         time.Duration // Time allowed to wait response from server.
-	ReconnectionAttempts int
+	Addr             string        // TCP address to listen.
+	MessageSizeLimit int64         // Maximum message size allowed from client.
+	WriteWait        time.Duration // Time allowed to write a message to the client.
+	PongWait         time.Duration // Time allowed to read the next pong message from the peer.
+	PingPeriod       time.Duration // Send pings to peer with this period. Must be less than pongWait.
+	ResponseWait     time.Duration // Time allowed to wait response from server.
+
+	ReconnectionDelay    time.Duration // Delay between connection attempts, used in RunListener
+	ReconnectionAttempts int           // used in RunListener
 
 	conn  *websocket.Conn
 	event chan<- *EventMessage
@@ -45,12 +47,14 @@ type EventListener struct {
 
 func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 	return &EventListener{
-		Addr:                 addr,
-		MessageSizeLimit:     messageSizeLimit,
-		WriteWait:            writeWait,
-		PongWait:             pongWait,
-		PingPeriod:           pingPeriod,
-		ResponseWait:         responseWait,
+		Addr:             addr,
+		MessageSizeLimit: messageSizeLimit,
+		WriteWait:        writeWait,
+		PongWait:         pongWait,
+		PingPeriod:       pingPeriod,
+		ResponseWait:     responseWait,
+
+		ReconnectionDelay:    reconnectionDelay,
 		ReconnectionAttempts: reconnectionAttempts,
 
 		event:         event,
@@ -61,6 +65,8 @@ func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 	}
 }
 
+// ListenAndServe starts the action listener. Returns an error if unable to connect.
+// This method is non-blocking but does not support reconnections. If you need to maintain a connection, use Run
 func (e *EventListener) ListenAndServe(parentContext context.Context) error {
 	u := url.URL{Scheme: "ws", Host: e.Addr, Path: "/"}
 

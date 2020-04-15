@@ -9,34 +9,38 @@ import (
 	"time"
 )
 
-func listenAndServe(parentContext context.Context, listener *EventListener) {
+// Run starts the action listener tries to reconnect and restore subscriptions in case of an error.
+// Run in goroutine because this method is blocking
+func (e *EventListener) Run(parentContext context.Context) {
 	log := pumpsLog.Named("reconnect")
 	defer func() {
-		listener.Close()
+		e.Close()
 		log.Debug("listener close")
 	}()
 
-	u := url.URL{Scheme: "ws", Host: listener.Addr, Path: "/"}
-	g, ctx := errgroup.WithContext(parentContext)
+	u := url.URL{Scheme: "ws", Host: e.Addr, Path: "/"}
+	attempt := 1
 
-	attempts := 1
 	for {
-		log.Debug("connection", zap.Int("attempts", attempts))
+		log.Debug("connection", zap.Int("attempt", attempt))
 
+		g, ctx := errgroup.WithContext(parentContext)
 		var err error
 
-		listener.conn, _, err = websocket.DefaultDialer.DialContext(ctx, u.String(), nil)
+		e.conn, _, err = websocket.DefaultDialer.DialContext(ctx, u.String(), nil)
 		if err == nil {
+			attempt = 0
+
 			log.Debug("connected", zap.String("url", u.String()))
 			g.Go(func() error {
-				return listener.readPump(ctx)
+				return e.readPump(ctx)
 			})
 			g.Go(func() error {
-				return listener.writePump(ctx)
+				return e.writePump(ctx)
 			})
 
-			for eventType, offset := range listener.subscriptions {
-				if _, err := listener.Subscribe(eventType, offset); err != nil {
+			for eventType, offset := range e.subscriptions {
+				if _, err := e.Subscribe(eventType, offset); err != nil {
 					log.Error("subscribe error", zap.Error(err))
 					break
 				}
@@ -50,16 +54,16 @@ func listenAndServe(parentContext context.Context, listener *EventListener) {
 			log.Error("connection error", zap.String("url", u.String()), zap.Error(err))
 		}
 
-		attempts++
-		if attempts > listener.ReconnectionAttempts {
-			break
+		attempt++
+		if attempt > e.ReconnectionAttempts {
+			return
 		}
 
 		select {
 		case <-parentContext.Done():
-			break
-		case <-time.After(reconnectionDelay):
-			continue
+			log.Debug("parent context done")
+			return
+		case <-time.After(e.ReconnectionDelay):
 		}
 	}
 }

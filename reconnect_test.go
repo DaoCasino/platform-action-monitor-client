@@ -15,7 +15,7 @@ func TestEventListener_reconnectError(t *testing.T) {
 
 	listener := NewEventListener(":12345", events)
 	listener.ReconnectionAttempts = 1
-	go listenAndServe(parentContext, listener)
+	go listener.Run(parentContext)
 
 	ok, err := listener.Subscribe(0, 0)
 	assert.Equal(t, ListenerClosed, err)

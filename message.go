@@ -111,8 +111,8 @@ func (e *EventListener) updateOffset(events []*Event) {
 
 	for _, event := range events {
 		event := event
-		if offset, ok := e.subscriptions[event.EventType]; ok && offset < event.Offset {
-			e.subscriptions[event.EventType] = event.Offset
+		if _, ok := e.subscriptions[event.EventType]; ok {
+			e.subscriptions[event.EventType] = event.Offset + 1
 		}
 	}
 }
