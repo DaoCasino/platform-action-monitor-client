@@ -146,6 +146,8 @@ func (e *EventListener) addr() string {
 	return u.String()
 }
 
+// Close called in Run, use if calling ListenAndServe in defer block.
+// See client example
 func (e *EventListener) Close() {
 	close(e.done)
 	close(e.event)
