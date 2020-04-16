@@ -64,7 +64,14 @@ func (e *EventListener) sendRequest(req *requestMessage) (*responseMessage, erro
 	messageLog.Debug("sendRequest", zap.Any("request", json.RawMessage(message)))
 
 	wait := newResponseQueue(req.ID, message)
-	e.send <- wait
+
+	select {
+	case e.send <- wait:
+	case _, ok := <-e.done:
+		if !ok {
+			return nil, ListenerClosed
+		}
+	}
 
 	select {
 	case response := <-wait.response:
@@ -92,6 +99,20 @@ func (e *EventListener) processMessage(message []byte) error {
 		if e.event != nil {
 			e.event <- eventMessage
 		}
+
+		e.updateOffset(eventMessage.Events)
 	}
 	return nil
+}
+
+func (e *EventListener) updateOffset(events []*Event) {
+	e.Lock()
+	defer e.Unlock()
+
+	for _, event := range events {
+		event := event
+		if _, ok := e.subscriptions[event.EventType]; ok {
+			e.subscriptions[event.EventType] = event.Offset + 1
+		}
+	}
 }

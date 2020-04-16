@@ -6,16 +6,21 @@ import (
 	"errors"
 	"github.com/gorilla/websocket"
 	"net/url"
+	"sync"
 	"time"
 )
 
 const (
-	writeWait        = 10 * time.Second
-	pongWait         = 60 * time.Second
-	responseWait     = 10 * time.Second
-	pingPeriod       = (pongWait * 9) / 10
-	messageSizeLimit = 0
+	writeWait            = 10 * time.Second
+	pongWait             = 60 * time.Second
+	responseWait         = 10 * time.Second
+	pingPeriod           = (pongWait * 9) / 10
+	messageSizeLimit     = 0
+	reconnectionAttempts = 5
+	reconnectionDelay    = 2 * time.Second
 )
+
+var ListenerClosed = errors.New("listener closed")
 
 type EventListener struct {
 	Addr             string        // TCP address to listen.
@@ -25,11 +30,19 @@ type EventListener struct {
 	PingPeriod       time.Duration // Send pings to peer with this period. Must be less than pongWait.
 	ResponseWait     time.Duration // Time allowed to wait response from server.
 
+	ReconnectionDelay    time.Duration // Delay between connection attempts, used in RunListener
+	ReconnectionAttempts int           // used in RunListener
+
 	conn  *websocket.Conn
 	event chan<- *EventMessage
 
 	send     chan *responseQueue
 	response chan *responseMessage
+
+	done chan struct{}
+
+	sync.Mutex
+	subscriptions map[EventType]uint64
 }
 
 func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
@@ -41,12 +54,19 @@ func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 		PingPeriod:       pingPeriod,
 		ResponseWait:     responseWait,
 
-		event:    event,
-		send:     make(chan *responseQueue, 512),
-		response: make(chan *responseMessage, 512),
+		ReconnectionDelay:    reconnectionDelay,
+		ReconnectionAttempts: reconnectionAttempts,
+
+		event:         event,
+		send:          make(chan *responseQueue),
+		response:      make(chan *responseMessage),
+		subscriptions: make(map[EventType]uint64),
+		done:          make(chan struct{}),
 	}
 }
 
+// ListenAndServe starts the action listener. Returns an error if unable to connect.
+// This method is non-blocking but does not support reconnections. If you need to maintain a connection, use Run
 func (e *EventListener) ListenAndServe(parentContext context.Context) error {
 	u := url.URL{Scheme: "ws", Host: e.Addr, Path: "/"}
 
@@ -56,8 +76,8 @@ func (e *EventListener) ListenAndServe(parentContext context.Context) error {
 		return err
 	}
 
-	go e.readPump(parentContext)
-	go e.writePump(parentContext)
+	go func() { _ = e.readPump(parentContext) }()
+	go func() { _ = e.writePump(parentContext) }()
 	return nil
 }
 
@@ -82,6 +102,13 @@ func (e *EventListener) Subscribe(eventType EventType, offset uint64) (bool, err
 
 	result := false
 	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		e.subscriptions[eventType] = offset
+		e.Unlock()
+	}
+
 	return result, err
 }
 
@@ -104,5 +131,19 @@ func (e *EventListener) Unsubscribe(eventType EventType) (bool, error) {
 
 	result := false
 	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		delete(e.subscriptions, eventType)
+		e.Unlock()
+	}
+
 	return result, err
+}
+
+// Close called in Run, use if calling ListenAndServe in defer block.
+// See client example
+func (e *EventListener) Close() {
+	close(e.done)
+	close(e.event)
 }

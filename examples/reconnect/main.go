@@ -8,9 +8,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var addr = flag.String("addr", ":8888", "action monitor service address")
+
+func init() {
+	if os.Getenv("DEBUG") != "" {
+		eventlistener.EnableDebugLogging()
+	}
+}
 
 func main() {
 	flag.Parse()
@@ -22,20 +29,28 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	listener := eventlistener.NewEventListener(*addr, events)
-	if err := listener.ListenAndServe(parentContext); err != nil {
-		log.Fatal(err)
-	}
+	// setup reconnection options
+	listener.ReconnectionAttempts = 5
+	listener.ReconnectionDelay = 5 * time.Second
 
 	defer func() {
-		listener.Close()
 		cancel()
+		time.Sleep(time.Second) // wait close routines
 	}()
+
+	go listener.Run(parentContext)
 
 	if _, err := listener.Subscribe(0, 0); err != nil {
 		log.Fatal(err)
 	}
 
-	go func(ctx context.Context, events <-chan *eventlistener.EventMessage) {
+	canceled := make(chan struct{}, 1)
+
+	go func(ctx context.Context, events <-chan *eventlistener.EventMessage, done chan struct{}) {
+		defer func() {
+			done <- struct{}{}
+			close(done)
+		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -49,11 +64,14 @@ func main() {
 				}
 			}
 		}
-	}(parentContext, events)
+	}(parentContext, events, canceled)
 
-	<-done
+	select {
+	case <-done:
+	case <-canceled:
+	}
 
 	if _, err := listener.Unsubscribe(0); err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 }
