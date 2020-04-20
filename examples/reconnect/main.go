@@ -40,12 +40,7 @@ func main() {
 
 	go listener.Run(parentContext)
 
-	if _, err := listener.Subscribe(0, 0); err != nil {
-		log.Fatal(err)
-	}
-
 	canceled := make(chan struct{}, 1)
-
 	go func(ctx context.Context, events <-chan *eventlistener.EventMessage, done chan struct{}) {
 		defer func() {
 			done <- struct{}{}
@@ -65,6 +60,10 @@ func main() {
 			}
 		}
 	}(parentContext, events, canceled)
+
+	if _, err := listener.Subscribe(0, 0); err != nil {
+		log.Fatal(err)
+	}
 
 	select {
 	case <-done:

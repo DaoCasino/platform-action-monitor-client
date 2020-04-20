@@ -31,10 +31,6 @@ func main() {
 		cancel()
 	}()
 
-	if _, err := listener.Subscribe(0, 0); err != nil {
-		log.Fatal(err)
-	}
-
 	go func(ctx context.Context, events <-chan *eventlistener.EventMessage) {
 		for {
 			select {
@@ -45,11 +41,15 @@ func main() {
 					return
 				}
 				for _, event := range eventMessage.Events {
-					log.Printf("%+v %s\n", event, event.Data)
+					log.Printf("event: offset=%d, type=%d\n", event.Offset, event.EventType)
 				}
 			}
 		}
 	}(parentContext, events)
+
+	if _, err := listener.Subscribe(0, 0); err != nil {
+		log.Fatal(err)
+	}
 
 	<-done
 
