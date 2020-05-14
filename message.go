@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	methodSubscribe   = "subscribe"
-	methodUnsubscribe = "unsubscribe"
+	methodSubscribe        = "subscribe"
+	methodUnsubscribe      = "unsubscribe"
+	methodBatchSubscribe   = "batchSubscribe"
+	methodBatchUnsubscribe = "batchUnsubscribe"
 )
 
 type requestMessage struct {

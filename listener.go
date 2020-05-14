@@ -141,6 +141,78 @@ func (e *EventListener) Unsubscribe(eventType EventType) (bool, error) {
 	return result, err
 }
 
+func (e *EventListener) BatchSubscribe(eventTypes []EventType, offset uint64) (bool, error) {
+	params := struct {
+		Topics []string `json:"topics"`
+		Offset uint64   `json:"offset"`
+	}{
+		make([]string, len(eventTypes)),
+		offset,
+	}
+
+	for _, eventType := range eventTypes {
+		params.Topics = append(params.Topics, eventType.ToString())
+	}
+
+	request := newRequestMessage(methodBatchSubscribe, params)
+	response, err := e.sendRequest(request)
+	if err != nil {
+		return false, err
+	}
+
+	if response.Error != nil {
+		return false, errors.New(response.Error.Message)
+	}
+
+	result := false
+	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		for _, eventType := range eventTypes {
+			e.subscriptions[eventType] = offset
+		}
+		e.Unlock()
+	}
+
+	return result, err
+}
+
+func (e *EventListener) BatchUnsubscribe(eventTypes []EventType) (bool, error) {
+	params := struct {
+		Topics []string `json:"topics"`
+	}{
+		make([]string, len(eventTypes)),
+	}
+
+	for _, eventType := range eventTypes {
+		params.Topics = append(params.Topics, eventType.ToString())
+	}
+
+	request := newRequestMessage(methodBatchUnsubscribe, params)
+	response, err := e.sendRequest(request)
+	if err != nil {
+		return false, err
+	}
+
+	if response.Error != nil {
+		return false, errors.New(response.Error.Message)
+	}
+
+	result := false
+	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		for _, eventType := range eventTypes {
+			delete(e.subscriptions, eventType)
+		}
+		e.Unlock()
+	}
+
+	return result, err
+}
+
 // Close called in Run, use if calling ListenAndServe in defer block.
 // See client example
 func (e *EventListener) Close() {
