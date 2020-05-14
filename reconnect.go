@@ -39,9 +39,20 @@ func (e *EventListener) Run(parentContext context.Context) {
 				return e.writePump(ctx)
 			})
 
+			// Group by offset
+			subscriptions := make(map[uint64][]EventType)
+
 			for eventType, offset := range e.subscriptions {
-				if _, err := e.Subscribe(eventType, offset); err != nil {
-					log.Error("subscribe error", zap.Error(err))
+				if eventTypes, ok := subscriptions[offset]; ok {
+					subscriptions[offset] = append(eventTypes, eventType)
+				} else {
+					subscriptions[offset] = []EventType{eventType}
+				}
+			}
+
+			for offset, eventTypes := range subscriptions {
+				if _, err := e.BatchSubscribe(eventTypes, offset); err != nil {
+					log.Error("batchSubscribe error", zap.Error(err))
 					break
 				}
 			}
