@@ -150,8 +150,8 @@ func (e *EventListener) BatchSubscribe(eventTypes []EventType, offset uint64) (b
 		offset,
 	}
 
-	for _, eventType := range eventTypes {
-		params.Topics = append(params.Topics, eventType.ToString())
+	for i, eventType := range eventTypes {
+		params.Topics[i] = eventType.ToString()
 	}
 
 	request := newRequestMessage(methodBatchSubscribe, params)
@@ -185,8 +185,8 @@ func (e *EventListener) BatchUnsubscribe(eventTypes []EventType) (bool, error) {
 		make([]string, len(eventTypes)),
 	}
 
-	for _, eventType := range eventTypes {
-		params.Topics = append(params.Topics, eventType.ToString())
+	for i, eventType := range eventTypes {
+		params.Topics[i] = eventType.ToString()
 	}
 
 	request := newRequestMessage(methodBatchUnsubscribe, params)

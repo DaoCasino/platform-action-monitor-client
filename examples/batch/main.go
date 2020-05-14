@@ -31,7 +31,7 @@ func main() {
 	listener := eventlistener.NewEventListener(*addr, events)
 	// setup reconnection options
 	listener.ReconnectionAttempts = 5
-	listener.ReconnectionDelay = 5 * time.Second
+	listener.ReconnectionDelay = time.Second
 
 	defer func() {
 		cancel()
@@ -46,6 +46,8 @@ func main() {
 			done <- struct{}{}
 			close(done)
 		}()
+
+		counter := make(map[eventlistener.EventType]int)
 		for {
 			select {
 			case <-ctx.Done():
@@ -55,8 +57,13 @@ func main() {
 					return
 				}
 				for _, event := range eventMessage.Events {
-					log.Printf("%+v %s\n", event, event.Data)
+					if _, ok := counter[event.EventType]; !ok {
+						counter[event.EventType] = 1
+					} else {
+						counter[event.EventType]++
+					}
 				}
+				log.Printf("%+v\n", counter)
 			}
 		}
 	}(parentContext, events, canceled)
