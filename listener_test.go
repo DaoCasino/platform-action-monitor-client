@@ -9,7 +9,9 @@ import (
 )
 
 const (
-	actionMonitorAddr = ":8888"
+	waitEventsTimeout = time.Second
+	event             = 0
+	offset            = 0
 )
 
 func TestNewEventListener(t *testing.T) {
@@ -36,13 +38,15 @@ func TestEventListener_Subscribe(t *testing.T) {
 	parentContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	listener := NewEventListener(actionMonitorAddr, nil)
+	listener := NewEventListener(*addr, nil)
+	listener.SetToken(*token)
+
 	if err := listener.ListenAndServe(parentContext); err != nil {
 		t.Skip("listen error", err.Error())
 		return
 	}
 
-	ok, err := listener.Subscribe(0, 0)
+	ok, err := listener.Subscribe(event, offset)
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
@@ -51,7 +55,9 @@ func TestEventListener_Unsubscribe(t *testing.T) {
 	parentContext, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	listener := NewEventListener(actionMonitorAddr, nil)
+	listener := NewEventListener(*addr, nil)
+	listener.SetToken(*token)
+
 	if err := listener.ListenAndServe(parentContext); err != nil {
 		t.Skip("listen error", err.Error())
 		return
@@ -62,11 +68,56 @@ func TestEventListener_Unsubscribe(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, ok)
 
-	ok, err = listener.Subscribe(0, 0)
+	ok, err = listener.Subscribe(event, offset)
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	ok, err = listener.Unsubscribe(0)
+	ok, err = listener.Unsubscribe(event)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestEventListener_BatchSubscribe(t *testing.T) {
+	parentContext, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener := NewEventListener(*addr, nil)
+	listener.SetToken(*token)
+
+	if err := listener.ListenAndServe(parentContext); err != nil {
+		t.Skip("listen error", err.Error())
+		return
+	}
+
+	ok, err := listener.BatchSubscribe([]EventType{event}, offset)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestEventListener_BatchUnsubscribe(t *testing.T) {
+	parentContext, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener := NewEventListener(*addr, nil)
+	listener.SetToken(*token)
+
+	if err := listener.ListenAndServe(parentContext); err != nil {
+		t.Skip("listen error", err.Error())
+		return
+	}
+
+	// Unsubscribing from a topic that is not subscribed to
+	ok, err := listener.BatchUnsubscribe([]EventType{666})
+	require.Error(t, err)
+	assert.False(t, ok)
+
+	types := []EventType{event}
+
+	ok, err = listener.BatchSubscribe(types, offset)
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = listener.BatchUnsubscribe(types)
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
@@ -78,17 +129,19 @@ func TestEventListener_EventsMessage(t *testing.T) {
 		cancel()
 	}()
 
-	listener := NewEventListener(":8888", events)
+	listener := NewEventListener(*addr, events)
+	listener.SetToken(*token)
+
 	if err := listener.ListenAndServe(parentContext); err != nil {
 		t.Skip("listen error", err.Error())
 		return
 	}
 
-	ok, err := listener.Subscribe(0, 0)
+	ok, err := listener.Subscribe(event, offset)
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	waitContext, cancelWait := context.WithTimeout(parentContext, 2*time.Second)
+	waitContext, cancelWait := context.WithTimeout(parentContext, waitEventsTimeout)
 
 loop:
 	for {
