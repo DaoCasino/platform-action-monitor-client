@@ -24,6 +24,7 @@ var ListenerClosed = errors.New("listener closed")
 
 type EventListener struct {
 	Addr             string        // TCP address to listen.
+	Token            string        // User token
 	MessageSizeLimit int64         // Maximum message size allowed from client.
 	WriteWait        time.Duration // Time allowed to write a message to the client.
 	PongWait         time.Duration // Time allowed to read the next pong message from the peer.
@@ -48,6 +49,7 @@ type EventListener struct {
 func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 	return &EventListener{
 		Addr:             addr,
+		Token:            "",
 		MessageSizeLimit: messageSizeLimit,
 		WriteWait:        writeWait,
 		PongWait:         pongWait,
@@ -63,6 +65,11 @@ func NewEventListener(addr string, event chan<- *EventMessage) *EventListener {
 		subscriptions: make(map[EventType]uint64),
 		done:          make(chan struct{}),
 	}
+}
+
+// Since ActionMonitor v1.1.0 token has become a required parameter for methods subscribe and batchSubscribe
+func (e *EventListener) SetToken(token string) {
+	e.Token = token
 }
 
 // ListenAndServe starts the action listener. Returns an error if unable to connect.
@@ -83,9 +90,11 @@ func (e *EventListener) ListenAndServe(parentContext context.Context) error {
 
 func (e *EventListener) Subscribe(eventType EventType, offset uint64) (bool, error) {
 	params := struct {
+		Token  string `json:"token"`
 		Topic  string `json:"topic"`
 		Offset uint64 `json:"offset"`
 	}{
+		e.Token,
 		eventType.ToString(),
 		offset,
 	}
@@ -135,6 +144,80 @@ func (e *EventListener) Unsubscribe(eventType EventType) (bool, error) {
 	if err == nil && result {
 		e.Lock()
 		delete(e.subscriptions, eventType)
+		e.Unlock()
+	}
+
+	return result, err
+}
+
+func (e *EventListener) BatchSubscribe(eventTypes []EventType, offset uint64) (bool, error) {
+	params := struct {
+		Token  string   `json:"token"`
+		Topics []string `json:"topics"`
+		Offset uint64   `json:"offset"`
+	}{
+		e.Token,
+		make([]string, len(eventTypes)),
+		offset,
+	}
+
+	for i, eventType := range eventTypes {
+		params.Topics[i] = eventType.ToString()
+	}
+
+	request := newRequestMessage(methodBatchSubscribe, params)
+	response, err := e.sendRequest(request)
+	if err != nil {
+		return false, err
+	}
+
+	if response.Error != nil {
+		return false, errors.New(response.Error.Message)
+	}
+
+	result := false
+	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		for _, eventType := range eventTypes {
+			e.subscriptions[eventType] = offset
+		}
+		e.Unlock()
+	}
+
+	return result, err
+}
+
+func (e *EventListener) BatchUnsubscribe(eventTypes []EventType) (bool, error) {
+	params := struct {
+		Topics []string `json:"topics"`
+	}{
+		make([]string, len(eventTypes)),
+	}
+
+	for i, eventType := range eventTypes {
+		params.Topics[i] = eventType.ToString()
+	}
+
+	request := newRequestMessage(methodBatchUnsubscribe, params)
+	response, err := e.sendRequest(request)
+	if err != nil {
+		return false, err
+	}
+
+	if response.Error != nil {
+		return false, errors.New(response.Error.Message)
+	}
+
+	result := false
+	err = json.Unmarshal(response.Result, &result)
+
+	if err == nil && result {
+		e.Lock()
+		for _, eventType := range eventTypes {
+			delete(e.subscriptions, eventType)
+		}
 		e.Unlock()
 	}
 
