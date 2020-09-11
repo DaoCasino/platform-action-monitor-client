@@ -42,6 +42,7 @@ func (e *EventListener) Run(parentContext context.Context) {
 			// Group by offset
 			subscriptions := make(map[uint64][]EventType)
 
+			e.Lock()
 			for eventType, offset := range e.subscriptions {
 				if eventTypes, ok := subscriptions[offset]; ok {
 					subscriptions[offset] = append(eventTypes, eventType)
@@ -49,6 +50,7 @@ func (e *EventListener) Run(parentContext context.Context) {
 					subscriptions[offset] = []EventType{eventType}
 				}
 			}
+			e.Unlock()
 
 			for offset, eventTypes := range subscriptions {
 				if _, err := e.BatchSubscribe(eventTypes, offset); err != nil {
